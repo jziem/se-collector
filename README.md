@@ -1,2 +1,2 @@
-# se-lsx-collector
-stock exchange LSX data collector
+# se-collector
+stock exchange data collector
