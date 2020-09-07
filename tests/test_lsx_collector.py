@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta
 
-from se_collector.lsx.lsx_collector import _ts_in_working_hours, _get_none_trading_days
+from se_collector.lsx.lsx_collector import _ts_in_working_hours, _get_none_trading_days, _get_trades
 
 
 def test__get_none_trading_days():
@@ -23,9 +23,6 @@ def test__ts_in_working_hours():
     year_start = year_start - timedelta(hours=8)  # 15:30 is within working hours
     assert _ts_in_working_hours(year_start)
 
-# def test__get_csv():
-#     assert False
-#
-#
-# def test_update():
-#     assert False
+
+def test__get_trades():
+    assert len(_get_trades())>0

@@ -1,6 +1,7 @@
 """
 Get all trades.
 """
+import io
 import logging
 from datetime import time, date, datetime, timedelta
 from functools import lru_cache
@@ -15,12 +16,20 @@ _URL_NOW: str = "https://www.ls-x.de/_rpc/json/.lstc/instrument/list/lsxtradesto
 _se_tt: [time, time] = [time(7, 30), time(23, 0)]  # stock exchange trading hours, in local time zone
 _se_twd: [int] = [1, 2, 3, 4, 5]  # stock exchange trading week days, ISO calendar week day
 
+
 class TradeData:
-    isin:str
-    displayName:str
-    time:datetime
-    price:float
-    volume:int
+    def __init__(self, isin: str, display_name: str, timestamp: datetime, price: float, volume: int):
+        self.isin = isin
+        self.display_name = display_name
+        self.timestamp: datetime = timestamp
+        self.price: float = price
+        self.volume: int = volume
+
+    @staticmethod
+    def from_str(isin: str, display_name: str, timestamp: str, price: str, volume: str):
+        return TradeData(isin.strip(), display_name.strip(), datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S.%f"),
+                         float(price.replace(",", ".")), int(volume))
+
 
 @lru_cache
 def _get_none_trading_days() -> Sequence[date]:
@@ -51,41 +60,22 @@ def _ts_in_working_hours(d: datetime) -> bool:
     return d.isoweekday() in _se_twd and _se_tt[0] <= d.time() <= _se_tt[1] and d.date() not in _get_none_trading_days()
 
 
-def _get_csv(today: bool) -> Optional[str]:
-    pass
-
-
-def _get_yesterday(d:datetime)-> Sequence[(str, str, datetime, float, int)]:
-    """
-        Get current trades
-        :param rd:
-        :return: [(ISIN, display name, timestamp, price, volume), ...]
-        """
-    # pdwh = previous day within working hours
-    pdwh = datetime(rd.year, rd.month, rd.day, 12, 0) - timedelta(days=1)
-    if _ts_in_working_hours(pdwh):
-        # only possible if previous day was is a working day
-        if r := requests.get(_URL_YESTERDAY):
-            if r.ok:
-                reader = csv.DictReader(r.content)
-                return [TradeData() for r in reader]
+def _fetch_data(url):
+    if r := requests.get(url):
+        if r.ok:
+            return r.content.decode("utf-8")
 
 
 # @lru_cache(maxsize=1)
-def _get_trades() -> Sequence[(str, str, datetime, float, int)]:
-    """
-    Get current trades
-    :param rd:
-    :return: [(ISIN, display name, timestamp, price, volume), ...]
-    """
+def _get_trades() -> Sequence[TradeData]:
     # pdwh = previous day within working hours
+    trades: [TradeData] = []
+    rd = datetime.now()
     pdwh = datetime(rd.year, rd.month, rd.day, 12, 0) - timedelta(days=1)
-    if _ts_in_working_hours(pdwh):
-        # only possible if previous day was is a working day
-        if r:=requests.get(_URL_YESTERDAY):
-            if r.ok:
-                reader=csv.DictReader(r.content)
-                return [TradeData() for r in reader]
-
-def update():
-    requests.get("https://www.ls-x.de/_rpc/json/.lstc/instrument/list/lsxtradestoday")
+    # if previous day was a working day, include this request too.
+    urls = [_URL_YESTERDAY, _URL_NOW] if _ts_in_working_hours(pdwh) else [_URL_NOW]
+    for u in urls:
+        with io.StringIO(_fetch_data(u), newline="\r\n") as f:
+            trades.extend([TradeData.from_str(r["isin"], r["displayName"], r["time"], r["price"], r["size"]) for r in
+                           csv.DictReader(f, delimiter=';', quoting=csv.QUOTE_ALL)])
+    return trades
