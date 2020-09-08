@@ -13,6 +13,7 @@ import requests
 
 _URL_YESTERDAY: str = "https://www.ls-x.de/_rpc/json/.lstc/instrument/list/lsxtradesyesterday"
 _URL_NOW: str = "https://www.ls-x.de/_rpc/json/.lstc/instrument/list/lsxtradestoday"
+_URL_NONE_TRADING_DAYS = "https://www.ls-x.de/de/wissen"
 _se_tt: [time, time] = [time(7, 30), time(23, 0)]  # stock exchange trading hours, in local time zone
 _se_twd: [int] = [1, 2, 3, 4, 5]  # stock exchange trading week days, ISO calendar week day
 
@@ -30,14 +31,20 @@ class TradeData:
         return TradeData(isin.strip(), display_name.strip(), datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S.%f"),
                          float(price.replace(",", ".")), int(volume))
 
+    def __eq__(self, o: object) -> bool:
+        # unique is only the combination of ISIN and data fields, display name does not matter.
+        if isinstance(o,
+                      TradeData) and o.isin == self.isin and o.timestamp == self.timestamp and o.volume == self.volume and o.price == self.price:
+            return True
+        return False
+
 
 @lru_cache
-def _get_none_trading_days() -> Sequence[date]:
+def _get_none_trading_days(url: str = _URL_NONE_TRADING_DAYS) -> Sequence[date]:
     """
     Get none working days, documented at LS-X.
     :return: optional array of dates or none.
     """
-    url = "https://www.ls-x.de/de/wissen"
     if r := requests.get(url):
         if r.ok:
             # lsx show none working days with a single table at above url.
